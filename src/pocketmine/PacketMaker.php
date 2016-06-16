@@ -86,13 +86,13 @@ class PacketMaker extends Worker {
 			foreach ($data['moveData'] as $identifier => $moveData) {
 				$pk = new MoveEntityPacket($moveData['additionalChar']);
 				$pk->entities = $moveData['data'];
-				$res = $this->makeBuffer($identifier, $moveData['additionalChar'], $pk, false, false);
+				$res = $this->tempMakeBuffer($identifier, $moveData['additionalChar'], $pk, false, false);
 				$this->externalQueue[] = $res;
 			}	
 			foreach ($data['motionData'] as $identifier => $motionData) {
 				$pk = new SetEntityMotionPacket($motionData['additionalChar']);
 				$pk->entities = $motionData['data'];
-				$res = $this->makeBuffer($identifier, $motionData['additionalChar'], $pk, false, false);
+				$res = $this->tempMakeBuffer($identifier, $motionData['additionalChar'], $pk, false, false);
 				$this->externalQueue[] = $res;
 			}
 		} elseif($data['isBatch']) {
@@ -125,10 +125,22 @@ class PacketMaker extends Worker {
 			$pk15->encode();
 			$pk15->isEncoded = true;
 			foreach($data['targets'] as $target){
-				$this->externalQueue[] = $this->makeBuffer($target[0], $target[1], ($target[1] == chr(0xfe) ? $pk15 : $pk), false, false);
+				$this->externalQueue[] = $this->tempMakeBuffer($target[0], $target[1], ($target[1] == chr(0xfe) ? $pk15 : $pk), false, false);
 			}
 		}
 		
+	}
+        
+        protected function tempMakeBuffer($identifier, $additionalChar, $fullPacket, $needACK, $identifierACK) {
+		if (!$fullPacket->isEncoded) {
+			$fullPacket->encode();
+		}
+		$fullPacket->updateBuffer($additionalChar);
+		$data = array(
+			'identifier' => $identifier,
+			'buffer' => $fullPacket->buffer,
+		);
+		return serialize($data);
 	}
 
 	protected function makeBuffer($identifier, $additionalChar, $fullPacket, $needACK, $identifierACK) {		

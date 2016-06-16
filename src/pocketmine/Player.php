@@ -138,9 +138,8 @@ use pocketmine\tile\Tile;
 use pocketmine\utils\TextFormat;
 use pocketmine\network\protocol\SetPlayerGameTypePacket;
 use pocketmine\block\Liquid;
-use pocketmine\network\protocol\ATestPacket;
+use pocketmine\network\protocol\ServerToClientHandshake;
 
-use raklib\Binary;
 
 /**
  * Main class that handles networking, recovery, and packet sending to the server part
@@ -716,7 +715,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 			}
 		}
 		
-		if($this->chunkLoadCount >= 36 and $this->spawned === false){
+		if($this->chunkLoadCount >= $this->viewDistance and $this->spawned === false){
 			$this->spawned = true;
 
 			$this->sendSettings();
@@ -868,7 +867,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 			return false;
 		}
 		
-			$this->interface->putPacket($this, $packet, $needACK, false);	
+                $this->interface->putPacket($this, $packet, $needACK, false);	
 		return true;
 	}
 
@@ -1706,24 +1705,21 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				$this->setNameTag($this->username);
 				$this->iusername = strtolower($this->username);
 				
-				//if(!in_array($packet->protocol1, ProtocolInfo::ACCEPTED_PROTOCOLS)){
-					// in-case something goes wrong
-					// $message = "change your client";
-					if($packet->protocol1 < ProtocolInfo::OLDEST_PROTOCOL - 1) {
-						$message = "upgrade";
-					} elseif($packet->protocol1 > ProtocolInfo::NEWEST_PROTOCOL) {
-						$message = "downgrade";
-					}
-					if(isset($message)) {
-						$pk = new PlayStatusPacket();
-						$pk->status = PlayStatusPacket::LOGIN_FAILED_CLIENT;
-						$this->dataPacket($pk);
-						$this->close("", TextFormat::RED . "Please " . $message . " to Minecraft: PE " . TextFormat::GREEN . $this->getServer()->getVersion() . TextFormat::RED . " to join.", false);
-						//Timings::$timerLoginPacket->stopTiming();
-						return;
-					}
 
-				//}
+                                if($packet->protocol1 < ProtocolInfo::OLDEST_PROTOCOL - 1) {
+                                        $message = "upgrade";
+                                } elseif($packet->protocol1 > ProtocolInfo::NEWEST_PROTOCOL) {
+                                        $message = "downgrade";
+                                }
+                                if(isset($message)) {
+                                        $pk = new PlayStatusPacket();
+                                        $pk->status = PlayStatusPacket::LOGIN_FAILED_CLIENT;
+                                        $this->dataPacket($pk);
+                                        $this->close("", TextFormat::RED . "Please " . $message . " to Minecraft: PE " . TextFormat::GREEN . $this->getServer()->getVersion() . TextFormat::RED . " to join.", false);
+                                        //Timings::$timerLoginPacket->stopTiming();
+                                        return;
+                                }
+
 				
 				$this->randomClientId = $packet->clientId;
 				$this->loginData = ["clientId" => $packet->clientId, "loginData" => null];
@@ -1835,53 +1831,16 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 					$this->close(TextFormat::YELLOW . $this->username . " has left the game", "Corrupt joining data, check your connection.");
 					//Timings::$timerLoginPacket->stopTiming();
 					return;
-				}
-			
-			
-				
-				$s = '';
-				for ($i = 0; $i < 128; $i++){
-					$s .= '0';
-				}
-//			var_dump($packet->identityPublicKey);	
-//			while(empty($test = file_get_contents('test.txt'))) {}
-//				
-//				$pk = new ATestPacket();
-//				$pk->key1 = 'MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEqofKIr6LBTeOscce8yCtdG4dO2KLp5uYWfdB4IJUKjhVAvJdv1UpbDpUXjhydgq3NhfeSpYmLG9dnpi/kpLcKfj0Hb0omhR86doxE7XwuMAKYLHOHX6BnXpDHXyQ6g5f';
-//				$pk->key2 = $s;
-//				$this->dataPacket($pk);
-//
-//					return;
-				$pk = new PlayStatusPacket();
-				$pk->status = PlayStatusPacket::LOGIN_SUCCESS;
+				}		
+
+				$token =  $this->server->getServerToken();
+                                
+				$pk = new ServerToClientHandshake();
+				$pk->publicKey = $this->server->getServerPublicKey();
+				$pk->serverToken = $token;
 				$this->dataPacket($pk);
-				
-				$this->achievements = [];
-
-				/** @var Byte $achievement */
-				foreach($nbt->Achievements as $achievement){
-					$this->achievements[$achievement->getName()] = $achievement->getValue() > 0 ? true : false;
-				}
-
-				$nbt->lastPlayed = new LongTag("lastPlayed", floor(microtime(true) * 1000));
-				parent::__construct($this->level->getChunk($nbt["Pos"][0] >> 4, $nbt["Pos"][2] >> 4, true), $nbt);
-				$this->loggedIn = true;
-				$this->server->addOnlinePlayer($this);
-
-				$this->server->getPluginManager()->callEvent($ev = new PlayerLoginEvent($this, "Plugin reason"));
-				if($ev->isCancelled()){
-					$this->close(TextFormat::YELLOW . $this->username . " has left the game", $ev->getKickMessage());
-					//Timings::$timerLoginPacket->stopTiming();
-					return;
-				}
-
-				if($this->isCreative()){
-					$this->inventory->setHeldItemSlot(0);
-				}else{
-					$this->inventory->setHeldItemSlot($this->inventory->getHotbarSlotIndex(0));
-				}
-				
-				
+                                
+				$this->enableEncrypt($token,  $this->server->generateSecret($packet->identityPublicKey));
 
 				$this->uuid = $packet->clientUUID;
 				$this->rawUUID = $this->uuid->toBinary();
@@ -1890,71 +1849,7 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				if($this->spawnPosition === null and isset($this->namedtag->SpawnLevel) and ($level = $this->server->getLevelByName($this->namedtag["SpawnLevel"])) instanceof Level){
 					$this->spawnPosition = new Position($this->namedtag["SpawnX"], $this->namedtag["SpawnY"], $this->namedtag["SpawnZ"], $level);
 				}
-				
-				$spawnPosition = $this->getSpawn();
-				
-				$pk = new StartGamePacket();
-				$pk->seed = -1;
-				$pk->dimension = 0;
-				$pk->x = $this->x;
-				$pk->y = $this->y;
-				$pk->z = $this->z;
-//				$pk->spawnX = (int) $spawnPosition->x;
-//				$pk->spawnY = (int) $spawnPosition->y;
-//				$pk->spawnZ = (int) $spawnPosition->z;
-				/* hack for compass*/
-				$pk->spawnX = 15000;
-				$pk->spawnY = 10;
-				$pk->spawnZ = -1000000;
-				$pk->generator = 1; //0 old, 1 infinite, 2 flat
-				$pk->gamemode = $this->gamemode & 0x01;
-				$pk->eid = 0;//$this->getId(); //Always use EntityID as zero for the actual player
-				$this->dataPacket($pk);
-				
-				$pk = new SetTimePacket();
-				$pk->time = $this->level->getTime();
-				$pk->started = true;
-				$this->dataPacket($pk);
 
-				$pk = new SetSpawnPositionPacket();
-				$pk->x = (int) $spawnPosition->x;
-				$pk->y = (int) $spawnPosition->y;
-				$pk->z = (int) $spawnPosition->z;
-				$this->dataPacket($pk);
-				
-				if($this->getHealth() <= 0){
-					$this->dead = true;
-				}
-
-				$pk = new SetDifficultyPacket();
-				$pk->difficulty = $this->server->getDifficulty();
-				$this->dataPacket($pk);
-
-				$this->server->getLogger()->info(TextFormat::AQUA . $this->username . TextFormat::WHITE . "/" . TextFormat::AQUA . $this->ip . " connected");
-
-				if($this->gamemode === Player::SPECTATOR){
-					$pk = new ContainerSetContentPacket();
-					$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
-					$this->dataPacket($pk);
-				}elseif($this->gamemode === Player::CREATIVE) {
-					$pk = new ContainerSetContentPacket();
-					$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
-					foreach(Item::getCreativeItems() as $item){
-						$pk->slots[] = clone $item;
-					}
-					$this->dataPacket($pk);
-				}
-
-				$this->server->sendFullPlayerListData($this);
-				$this->server->sendRecipeList($this);
-
-//				if($this->protocol != Info::OLDEST_PROTOCOL) {
-//				if($this->protocol < Info::OLDEST_PROTOCOL) {
-//					$this->sendMessage(TextFormat::RED . "You are using an unsupported version of MCPE we recommend switching to " . TextFormat::GREEN . $this->getServer()->getVersion() . TextFormat::RED .".");
-//					$this->sendTip(TextFormat::RED . "You are using an unsupported version of MCPE we recommend switching to " . TextFormat::GREEN .$this->getServer()->getVersion() . TextFormat::RED .".");
-//				}
-//				$this->orderChunks();
-//				$this->sendNextChunk();
 				//Timings::$timerLoginPacket->stopTiming();
 				break;
 			case ProtocolInfo::MOVE_PLAYER_PACKET:
@@ -3026,14 +2921,103 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				break;
 			case ProtocolInfo::REQUEST_CHUNK_RADIUS_PACKET:
 				//Timings::$timerChunkRudiusPacket->startTiming();
- 				//if($this->spawned){
 				$this->viewDistance = $packet->radius ** 2;
- 				//}
- 				$pk = new ChunkRadiusUpdatePacket();
- 				$pk->radius = $packet->radius;
- 				$this->dataPacket($pk);
+                           
+				$nbt = $this->server->getOfflinePlayerData($this->username);
+				$this->achievements = [];
+
+				/** @var Byte $achievement */
+				foreach($nbt->Achievements as $achievement){
+					$this->achievements[$achievement->getName()] = $achievement->getValue() > 0 ? true : false;
+				}
+
+				$nbt->lastPlayed = new LongTag("lastPlayed", floor(microtime(true) * 1000));
+				parent::__construct($this->level->getChunk($nbt["Pos"][0] >> 4, $nbt["Pos"][2] >> 4, true), $nbt);
+				$this->loggedIn = true;
+				$this->server->addOnlinePlayer($this);
+
+				$this->server->getPluginManager()->callEvent($ev = new PlayerLoginEvent($this, "Plugin reason"));
+				if($ev->isCancelled()){
+					$this->close(TextFormat::YELLOW . $this->username . " has left the game", $ev->getKickMessage());
+					//Timings::$timerLoginPacket->stopTiming();
+					return;
+				}
+
+				if($this->isCreative()){
+					$this->inventory->setHeldItemSlot(0);
+				}else{
+					$this->inventory->setHeldItemSlot($this->inventory->getHotbarSlotIndex(0));
+				}
+                                
+                                $pk = new SetTimePacket();
+				$pk->time = $this->level->getTime();
+				$pk->started = true;
+				$this->dataPacket($pk);
+                                
+				$spawnPosition = $this->getSpawn();
+
+				$pk = new SetSpawnPositionPacket();
+				$pk->x = (int) $spawnPosition->x;
+				$pk->y = (int) $spawnPosition->y;
+				$pk->z = (int) $spawnPosition->z;
+				$this->dataPacket($pk);
+				
+                                 
+                                
+				if($this->getHealth() <= 0){
+					$this->dead = true;
+				}
+
+				$pk = new SetDifficultyPacket();
+				$pk->difficulty = $this->server->getDifficulty();
+				$this->dataPacket($pk);
+                              
+
+				$this->server->getLogger()->info(TextFormat::AQUA . $this->username . TextFormat::WHITE . "/" . TextFormat::AQUA . $this->ip . " connected");
+
+				if($this->gamemode === Player::SPECTATOR){
+					$pk = new ContainerSetContentPacket();
+					$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
+					$this->dataPacket($pk);
+				}elseif($this->gamemode === Player::CREATIVE) {
+					$pk = new ContainerSetContentPacket();
+					$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
+					foreach(Item::getCreativeItems() as $item){
+						$pk->slots[] = clone $item;
+					}
+					$this->dataPacket($pk);
+				}
+
+                                  
+				$this->server->sendFullPlayerListData($this);                            
+				$this->server->sendRecipeList($this);
+
 				//Timings::$timerChunkRudiusPacket->stopTiming();
  				break;
+			 case ProtocolInfo::CLIENT_TO_SERVER_HANDSHAKE:
+				$pk = new PlayStatusPacket();
+				$pk->status = PlayStatusPacket::LOGIN_SUCCESS;
+				$this->dataPacket($pk);
+
+				$spawnPosition = $this->getSpawn();
+				$pk = new StartGamePacket();
+				$pk->seed = -1;
+				$pk->dimension = 0;
+				$pk->x = $this->x;
+				$pk->y = $this->y;
+				$pk->z = $this->z;
+//				$pk->spawnX = (int) $spawnPosition->x;
+//				$pk->spawnY = (int) $spawnPosition->y;
+//				$pk->spawnZ = (int) $spawnPosition->z;
+				/* hack for compass */
+				$pk->spawnX = 15000;
+				$pk->spawnY = 10;
+				$pk->spawnZ = -1000000;
+				$pk->generator = 1;
+				$pk->gamemode = $this->gamemode & 0x01;
+				$pk->eid = 0;
+				$this->dataPacket($pk);
+				break;
 			default:
 				break;
 		}
@@ -3620,7 +3604,57 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 	}
 	
 	public function getAdditionalChar() {
-		return $this->additionalChar;
+            return $this->additionalChar;
 	}
-	
+
+	public $lastDecryptStr = "";
+	public $lastEncryptStr = "";
+	public $sendPacketCounter = 0;
+	public $finalSecretKey = "";
+	public $finalIV = "";
+	public $encryptEnabled = false;
+
+	public function getEncrypt($sStr) {
+		$sStr .= $this->getCheckSum($sStr);
+		$sCipher = mcrypt_encrypt(MCRYPT_RIJNDAEL_128, $this->finalSecretKey, $this->lastEncryptStr . $sStr, MCRYPT_MODE_CFB, $this->finalIV);
+		$this->lastEncryptStr = $this->lastEncryptStr . $sStr; //substr($this->lastEncryptStr . $sStr, - (strlen($this->lastEncryptStr) % 32));
+		return substr($sCipher, -(strlen($sStr)));
+	}
+
+	public function getDecrypt($sStr) {
+		$sDecipher = mcrypt_decrypt(MCRYPT_RIJNDAEL_128, $this->finalSecretKey, $this->lastDecryptStr . $sStr, MCRYPT_MODE_CFB, $this->finalIV);
+		$this->lastDecryptStr = substr($this->lastDecryptStr . $sStr, - (strlen($this->lastDecryptStr) % 32));
+		return substr($sDecipher, -(strlen($sStr)));
+	}
+
+	public function testCryptography() {
+		$a = microtime(true);
+		$secret = base64_decode("MHHkkvydOs5jvejR3VqOKAAm5dA/FMzrplZ+PoWd9Ro=");
+		;
+		$IV = base64_decode("MHHkkvydOs5jvejR3VqOKA==");
+		$encryptetPacket = hex2bin("5a1a16951d93a6c1c017eed426263325e295a982ade11f78a005");
+		$encryptetPacket2 = hex2bin("4c31df2ddcce2ca922abf4eb3924cd26a1dbe78d46eea4993de8b7d70682");
+		$decryptedPacket = hex2bin("060000000d78da63606060640100000b0006cb52e93d1b41d255");
+		$decryptedPacket2 = hex2bin("060000001178da63606060b5656060e000000160004bf7d8a1a8e8c9d3fb");
+		var_dump(bin2hex($this->getDecrypt($encryptetPacket, $secret, $IV)));
+		var_dump(bin2hex($this->getDecrypt($encryptetPacket2, $secret, $IV)));
+		var_dump(bin2hex($this->getEncrypt($decryptedPacket, $secret, $IV)));
+		var_dump(bin2hex($this->getEncrypt($decryptedPacket2, $secret, $IV)));
+
+		var_dump(microtime(true) - $a);
+		return;
+	}
+
+	public function enableEncrypt($token, $secret) {
+		$this->finalSecretKey = hex2bin(hash("sha256", $token . $secret));
+		$this->finalIV = substr($this->finalSecretKey, 0, 16);
+		$this->encryptEnabled = true;
+//            var_dump(base64_encode( $this->finalSecretKey));
+	}
+
+	public function getCheckSum($packetPlaintext) {
+		$pkNumber = pack("P", $this->sendPacketCounter++);
+		return hex2bin(substr(hash("sha256", $pkNumber . $packetPlaintext . $this->finalSecretKey), 0, 16));
+	}
+
 }

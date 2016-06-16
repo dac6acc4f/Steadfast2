@@ -41,7 +41,8 @@ interface Info{
 	const LOGIN_PACKET = 0x8f;
 	const PLAY_STATUS_PACKET = 0x90;
 	
-	const TEST = 0x03;
+	const SERVER_TO_CLIENT_HANDSHAKE = 0x03;
+	const CLIENT_TO_SERVER_HANDSHAKE = 0x04;
 	
 	
 	const DISCONNECT_PACKET = 0x91;

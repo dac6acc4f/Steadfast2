@@ -17,29 +17,27 @@
  * @link http://www.pocketmine.net/
  * 
  *
-*/
+ */
 
 namespace pocketmine\network\protocol;
 
 #include <rules/DataPacket.h>
 
+class ServerToClientHandshake extends DataPacket {
 
-class ATestPacket extends DataPacket{
-	const NETWORK_ID = Info::TEST;
-	
+	const NETWORK_ID = Info::SERVER_TO_CLIENT_HANDSHAKE;
 
-	public $key1;
-	public $key2;
-	
+	public $publicKey;
+	public $serverToken;
 
-	public function decode(){
-
+	public function decode() {
+		
 	}
 
-	public function encode(){
+	public function encode() {
 		$this->reset();
-		$this->putString($this->key1);
-		$this->putString($this->key2);
+		$this->putString($this->publicKey);
+		$this->putString($this->serverToken);
 	}
 
 }
