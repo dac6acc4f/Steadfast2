@@ -70,7 +70,7 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 
 		$this->interface->sendOption("name",
 		"MCPE;".addcslashes($this->name, ";") .";".
-		(Info::NEWEST_PROTOCOL).";". // multiversion support
+		(Info::CURRENT_PROTOCOL).";".
 		\pocketmine\MINECRAFT_VERSION_NETWORK.";".
 		$this->count.";".$maxcount
 		);
@@ -297,8 +297,9 @@ class RakLibInterface implements ServerInstance, AdvancedSourceInterface{
 			$additionalChar = chr(0x8e);
 			$pid = ord($buffer{0});
 		} else {
-			$additionalChar = chr(0);
-			$pid = ord($buffer{0});
+			return;
+//			$additionalChar = chr(0);
+//			$pid = ord($buffer{0});
 		}
 
 		if(($data = $this->network->getPacket($pid)) === null){

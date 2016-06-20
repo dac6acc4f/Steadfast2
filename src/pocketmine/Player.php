@@ -1130,11 +1130,14 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 		if($this->isSpectator()){
 			$flags |= 0x100;
 		}
+		
+		$flags |= 0x02;  
+ 		$flags |= 0x04;  
 
 		$pk = new AdventureSettingsPacket();
 		$pk->flags = $flags;
 		$pk->userPermission = 2;
-        $pk->globalPermission = 2;
+        	$pk->globalPermission = 2;
 		$this->dataPacket($pk);
 	}
 
@@ -1700,35 +1703,24 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 					//Timings::$timerLoginPacket->stopTiming();
 					break;
 				}
+				
+				$this->additionalChar = $packet->additionalChar;
+				
+				if($packet->isValidProtocol === false) {
+					$this->close("", TextFormat::RED . "Please switch to Minecraft: PE " . TextFormat::GREEN . $this->getServer()->getVersion() . TextFormat::RED . " to join.");
+					break;
+				}
 
 				$this->username = TextFormat::clean($packet->username);
 				$this->displayName = $this->username;
 				$this->setNameTag($this->username);
 				$this->iusername = strtolower($this->username);
-				
-
-                                if($packet->protocol1 < ProtocolInfo::OLDEST_PROTOCOL - 1) {
-                                        $message = "upgrade";
-                                } elseif($packet->protocol1 > ProtocolInfo::NEWEST_PROTOCOL) {
-                                        $message = "downgrade";
-                                }
-                                if(isset($message)) {
-                                        $pk = new PlayStatusPacket();
-                                        $pk->status = PlayStatusPacket::LOGIN_FAILED_CLIENT;
-                                        $this->dataPacket($pk);
-                                        $this->close("", TextFormat::RED . "Please " . $message . " to Minecraft: PE " . TextFormat::GREEN . $this->getServer()->getVersion() . TextFormat::RED . " to join.", false);
-                                        //Timings::$timerLoginPacket->stopTiming();
-                                        return;
-                                }
-
-				
 				$this->randomClientId = $packet->clientId;
 				$this->loginData = ["clientId" => $packet->clientId, "loginData" => null];
 				$this->uuid = $packet->clientUUID;
 				$this->rawUUID = $this->uuid->toBinary();
 				$this->clientSecret = $packet->clientSecret;
 				$this->protocol = $packet->protocol1;
-				$this->additionalChar = $packet->additionalChar;
 //				if(strpos($packet->username, "\x00") !== false or preg_match('#^[a-zA-Z0-9_]{3,16}$#', $packet->username) == 0 or $this->username === "" or $this->iusername === "rcon" or $this->iusername === "console" or strlen($packet->username) > 16 or strlen($packet->username) < 3){
 				$valid = true;
 				$len = strlen($packet->username);
@@ -2949,8 +2941,9 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				}else{
 					$this->inventory->setHeldItemSlot($this->inventory->getHotbarSlotIndex(0));
 				}
+		
                                 
-                                $pk = new SetTimePacket();
+				$pk = new SetTimePacket();
 				$pk->time = $this->level->getTime();
 				$pk->started = true;
 				$this->dataPacket($pk);
@@ -2992,6 +2985,11 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
                                   
 				$this->server->sendFullPlayerListData($this);                            
 				$this->server->sendRecipeList($this);
+		
+				$pk = new SetEntityDataPacket();
+				$pk->eid = 0;
+				$pk->metadata = [self::DATA_LEAD_HOLDER => [self::DATA_TYPE_LONG, -1]];
+				$this->dataPacket($pk);
 
 				//Timings::$timerChunkRudiusPacket->stopTiming();
  				break;
