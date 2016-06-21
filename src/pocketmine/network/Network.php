@@ -211,7 +211,7 @@ class Network {
 	public function getServer(){
 		return $this->server;
 	}
-        	
+			
 	public function processBatch(BatchPacket $packet, Player $p){
 		$str = \zlib_decode($packet->payload, 1024 * 1024 * 64); //Max 64MB
 		$len = strlen($str);
@@ -228,7 +228,7 @@ class Network {
 					$pid = DataPacket::$pkKeys[$pid];
 					$updatetedPid = true;
 				}
-				$buf = substr($buf, 1);                           
+				$buf = substr($buf, 1);
 				if(($pk = $this->getPacket($pid)) !== null){
 					if($pk::NETWORK_ID === Info::BATCH_PACKET){
 						throw new \InvalidStateException("Invalid BatchPacket inside BatchPacket");
