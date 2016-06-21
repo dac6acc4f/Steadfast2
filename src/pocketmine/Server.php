@@ -2521,5 +2521,9 @@ class Server{
 		$sharedSecret = exec("./keyGen/createSharedSecret.sh '{$clientPublicKey}' '{$serverPrivateKey}'");		
 		return $sharedSecret;
 	}
+	
+	public function isUseEncrypt() {
+		return true;
+	}
 
 }

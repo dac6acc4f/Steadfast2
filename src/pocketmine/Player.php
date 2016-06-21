@@ -1828,13 +1828,16 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				}		
 
 				$token =  $this->server->getServerToken();
-                                
-				$pk = new ServerToClientHandshake();
-				$pk->publicKey = $this->server->getServerPublicKey();
-				$pk->serverToken = $token;
-				$this->dataPacket($pk);
-                                
-				$this->enableEncrypt($token,  $this->server->generateSecret($packet->identityPublicKey));
+                if($this->server->isUseEncrypt() && $this->additionalChar == chr(0xfe)) {	
+					$pk = new ServerToClientHandshake();
+					$pk->publicKey = $this->server->getServerPublicKey();
+					$pk->serverToken = $token;
+					$this->dataPacket($pk);
+
+					$this->enableEncrypt($token,  $this->server->generateSecret($packet->identityPublicKey));
+				} else {
+					$this->loginProcess();
+				}
 
 				$this->uuid = $packet->clientUUID;
 				$this->rawUUID = $this->uuid->toBinary();
@@ -2997,32 +3000,36 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 				//Timings::$timerChunkRudiusPacket->stopTiming();
  				break;
 			 case ProtocolInfo::CLIENT_TO_SERVER_HANDSHAKE:
-				$pk = new PlayStatusPacket();
-				$pk->status = PlayStatusPacket::LOGIN_SUCCESS;
-				$this->dataPacket($pk);
-
-				$spawnPosition = $this->getSpawn();
-				$pk = new StartGamePacket();
-				$pk->seed = -1;
-				$pk->dimension = 0;
-				$pk->x = $this->x;
-				$pk->y = $this->y;
-				$pk->z = $this->z;
-//				$pk->spawnX = (int) $spawnPosition->x;
-//				$pk->spawnY = (int) $spawnPosition->y;
-//				$pk->spawnZ = (int) $spawnPosition->z;
-				/* hack for compass */
-				$pk->spawnX = 15000;
-				$pk->spawnY = 10;
-				$pk->spawnZ = -1000000;
-				$pk->generator = 1;
-				$pk->gamemode = $this->gamemode & 0x01;
-				$pk->eid = 0;
-				$this->dataPacket($pk);
+					$this->loginProcess();
 				break;
 			default:
 				break;
 		}
+	}
+	
+	protected function loginProcess() {
+		$pk = new PlayStatusPacket();
+		$pk->status = PlayStatusPacket::LOGIN_SUCCESS;
+		$this->dataPacket($pk);
+
+		$spawnPosition = $this->getSpawn();
+		$pk = new StartGamePacket();
+		$pk->seed = -1;
+		$pk->dimension = 0;
+		$pk->x = $this->x;
+		$pk->y = $this->y;
+		$pk->z = $this->z;
+//		$pk->spawnX = (int) $spawnPosition->x;
+//		$pk->spawnY = (int) $spawnPosition->y;
+//		$pk->spawnZ = (int) $spawnPosition->z;
+		/* hack for compass */
+		$pk->spawnX = 15000;
+		$pk->spawnY = 10;
+		$pk->spawnZ = -1000000;
+		$pk->generator = 1;
+		$pk->gamemode = $this->gamemode & 0x01;
+		$pk->eid = 0;
+		$this->dataPacket($pk);
 	}
 
 	/**
@@ -3150,6 +3157,16 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 			$this->hasSpawned = [];
 			$this->spawnPosition = null;
 			unset($this->buffer);
+			if(isset($this->encryptChiper)) {
+				mcrypt_generic_deinit($this->encryptChiper);
+				mcrypt_module_close($this->encryptChiper);
+				$this->encryptChiper = null;
+			}
+			if(isset($this->decryptChiper)) {
+				mcrypt_generic_deinit($this->decryptChiper);
+				mcrypt_module_close($this->decryptChiper);
+				$this->decryptChiper = null;
+			}	
 		}
 			
 			$this->perm->clearPermissions();
