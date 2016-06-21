@@ -2915,81 +2915,83 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 			case ProtocolInfo::REQUEST_CHUNK_RADIUS_PACKET:
 				//Timings::$timerChunkRudiusPacket->startTiming();
 				$this->viewDistance = $packet->radius ** 2;
-                           
-				$nbt = $this->server->getOfflinePlayerData($this->username);
-				$this->achievements = [];
+                     
+				if(!$this->loggedIn) {
+					$nbt = $this->server->getOfflinePlayerData($this->username);
+					$this->achievements = [];
 
-				/** @var Byte $achievement */
-				foreach($nbt->Achievements as $achievement){
-					$this->achievements[$achievement->getName()] = $achievement->getValue() > 0 ? true : false;
-				}
-
-				$nbt->lastPlayed = new LongTag("lastPlayed", floor(microtime(true) * 1000));
-				parent::__construct($this->level->getChunk($nbt["Pos"][0] >> 4, $nbt["Pos"][2] >> 4, true), $nbt);
-				$this->loggedIn = true;
-				$this->server->addOnlinePlayer($this);
-
-				$this->server->getPluginManager()->callEvent($ev = new PlayerLoginEvent($this, "Plugin reason"));
-				if($ev->isCancelled()){
-					$this->close(TextFormat::YELLOW . $this->username . " has left the game", $ev->getKickMessage());
-					//Timings::$timerLoginPacket->stopTiming();
-					return;
-				}
-
-				if($this->isCreative()){
-					$this->inventory->setHeldItemSlot(0);
-				}else{
-					$this->inventory->setHeldItemSlot($this->inventory->getHotbarSlotIndex(0));
-				}
-		
-                                
-				$pk = new SetTimePacket();
-				$pk->time = $this->level->getTime();
-				$pk->started = true;
-				$this->dataPacket($pk);
-                                
-				$spawnPosition = $this->getSpawn();
-
-				$pk = new SetSpawnPositionPacket();
-				$pk->x = (int) $spawnPosition->x;
-				$pk->y = (int) $spawnPosition->y;
-				$pk->z = (int) $spawnPosition->z;
-				$this->dataPacket($pk);
-				
-                                 
-                                
-				if($this->getHealth() <= 0){
-					$this->dead = true;
-				}
-
-				$pk = new SetDifficultyPacket();
-				$pk->difficulty = $this->server->getDifficulty();
-				$this->dataPacket($pk);
-                              
-
-				$this->server->getLogger()->info(TextFormat::AQUA . $this->username . TextFormat::WHITE . "/" . TextFormat::AQUA . $this->ip . " connected");
-
-				if($this->gamemode === Player::SPECTATOR){
-					$pk = new ContainerSetContentPacket();
-					$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
-					$this->dataPacket($pk);
-				}elseif($this->gamemode === Player::CREATIVE) {
-					$pk = new ContainerSetContentPacket();
-					$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
-					foreach(Item::getCreativeItems() as $item){
-						$pk->slots[] = clone $item;
+					/** @var Byte $achievement */
+					foreach($nbt->Achievements as $achievement){
+						$this->achievements[$achievement->getName()] = $achievement->getValue() > 0 ? true : false;
 					}
+
+					$nbt->lastPlayed = new LongTag("lastPlayed", floor(microtime(true) * 1000));
+					parent::__construct($this->level->getChunk($nbt["Pos"][0] >> 4, $nbt["Pos"][2] >> 4, true), $nbt);
+					$this->loggedIn = true;
+					$this->server->addOnlinePlayer($this);
+
+					$this->server->getPluginManager()->callEvent($ev = new PlayerLoginEvent($this, "Plugin reason"));
+					if($ev->isCancelled()){
+						$this->close(TextFormat::YELLOW . $this->username . " has left the game", $ev->getKickMessage());
+						//Timings::$timerLoginPacket->stopTiming();
+						return;
+					}
+
+					if($this->isCreative()){
+						$this->inventory->setHeldItemSlot(0);
+					}else{
+						$this->inventory->setHeldItemSlot($this->inventory->getHotbarSlotIndex(0));
+					}
+
+
+					$pk = new SetTimePacket();
+					$pk->time = $this->level->getTime();
+					$pk->started = true;
+					$this->dataPacket($pk);
+
+					$spawnPosition = $this->getSpawn();
+
+					$pk = new SetSpawnPositionPacket();
+					$pk->x = (int) $spawnPosition->x;
+					$pk->y = (int) $spawnPosition->y;
+					$pk->z = (int) $spawnPosition->z;
+					$this->dataPacket($pk);
+
+
+
+					if($this->getHealth() <= 0){
+						$this->dead = true;
+					}
+
+					$pk = new SetDifficultyPacket();
+					$pk->difficulty = $this->server->getDifficulty();
+					$this->dataPacket($pk);
+
+
+					$this->server->getLogger()->info(TextFormat::AQUA . $this->username . TextFormat::WHITE . "/" . TextFormat::AQUA . $this->ip . " connected");
+
+					if($this->gamemode === Player::SPECTATOR){
+						$pk = new ContainerSetContentPacket();
+						$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
+						$this->dataPacket($pk);
+					}elseif($this->gamemode === Player::CREATIVE) {
+						$pk = new ContainerSetContentPacket();
+						$pk->windowid = ContainerSetContentPacket::SPECIAL_CREATIVE;
+						foreach(Item::getCreativeItems() as $item){
+							$pk->slots[] = clone $item;
+						}
+						$this->dataPacket($pk);
+					}
+
+
+					$this->server->sendFullPlayerListData($this);                            
+					$this->server->sendRecipeList($this);
+
+					$pk = new SetEntityDataPacket();
+					$pk->eid = 0;
+					$pk->metadata = [self::DATA_LEAD_HOLDER => [self::DATA_TYPE_LONG, -1]];
 					$this->dataPacket($pk);
 				}
-
-                                  
-				$this->server->sendFullPlayerListData($this);                            
-				$this->server->sendRecipeList($this);
-		
-				$pk = new SetEntityDataPacket();
-				$pk->eid = 0;
-				$pk->metadata = [self::DATA_LEAD_HOLDER => [self::DATA_TYPE_LONG, -1]];
-				$this->dataPacket($pk);
 
 				//Timings::$timerChunkRudiusPacket->stopTiming();
  				break;
@@ -3603,55 +3605,35 @@ class Player extends Human implements CommandSender, InventoryHolder, IPlayer{
 	}
 	
 	public function getAdditionalChar() {
-            return $this->additionalChar;
+		return $this->additionalChar;
 	}
 
-	public $lastDecryptStr = "";
-	public $lastEncryptStr = "";
-	public $sendPacketCounter = 0;
-	public $finalSecretKey = "";
-	public $finalIV = "";
-	public $encryptEnabled = false;
+	public $encryptEnabled = false;	
+	protected $sendPacketCounter = 0;
+	protected $finalSecretKey = "";
+	protected $finalIV = "";	
+	protected $encryptChiper;
+	protected $decryptChiper;
 
 	public function getEncrypt($sStr) {
-		$sStr .= $this->getCheckSum($sStr);
-		$sCipher = mcrypt_encrypt(MCRYPT_RIJNDAEL_128, $this->finalSecretKey, $this->lastEncryptStr . $sStr, MCRYPT_MODE_CFB, $this->finalIV);
-		$this->lastEncryptStr = $this->lastEncryptStr . $sStr; //substr($this->lastEncryptStr . $sStr, - (strlen($this->lastEncryptStr) % 32));
-		return substr($sCipher, -(strlen($sStr)));
+		return mcrypt_generic($this->encryptChiper, $sStr . $this->getCheckSum($sStr));
 	}
 
 	public function getDecrypt($sStr) {
-		$sDecipher = mcrypt_decrypt(MCRYPT_RIJNDAEL_128, $this->finalSecretKey, $this->lastDecryptStr . $sStr, MCRYPT_MODE_CFB, $this->finalIV);
-		$this->lastDecryptStr = substr($this->lastDecryptStr . $sStr, - (strlen($this->lastDecryptStr) % 32));
-		return substr($sDecipher, -(strlen($sStr)));
+		return mdecrypt_generic($this->decryptChiper, $sStr);
 	}
 
-	public function testCryptography() {
-		$a = microtime(true);
-		$secret = base64_decode("MHHkkvydOs5jvejR3VqOKAAm5dA/FMzrplZ+PoWd9Ro=");
-		;
-		$IV = base64_decode("MHHkkvydOs5jvejR3VqOKA==");
-		$encryptetPacket = hex2bin("5a1a16951d93a6c1c017eed426263325e295a982ade11f78a005");
-		$encryptetPacket2 = hex2bin("4c31df2ddcce2ca922abf4eb3924cd26a1dbe78d46eea4993de8b7d70682");
-		$decryptedPacket = hex2bin("060000000d78da63606060640100000b0006cb52e93d1b41d255");
-		$decryptedPacket2 = hex2bin("060000001178da63606060b5656060e000000160004bf7d8a1a8e8c9d3fb");
-		var_dump(bin2hex($this->getDecrypt($encryptetPacket, $secret, $IV)));
-		var_dump(bin2hex($this->getDecrypt($encryptetPacket2, $secret, $IV)));
-		var_dump(bin2hex($this->getEncrypt($decryptedPacket, $secret, $IV)));
-		var_dump(bin2hex($this->getEncrypt($decryptedPacket2, $secret, $IV)));
-
-		var_dump(microtime(true) - $a);
-		return;
-	}
-
-	public function enableEncrypt($token, $secret) {
+	protected function enableEncrypt($token, $secret) {
 		$this->finalSecretKey = hex2bin(hash("sha256", $token . $secret));
 		$this->finalIV = substr($this->finalSecretKey, 0, 16);
 		$this->encryptEnabled = true;
-//            var_dump(base64_encode( $this->finalSecretKey));
+		$this->encryptChiper = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CFB, '');
+		mcrypt_generic_init($this->encryptChiper, $this->finalSecretKey, $this->finalIV);
+		$this->decryptChiper = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CFB, '');
+		mcrypt_generic_init($this->decryptChiper, $this->finalSecretKey, $this->finalIV);
 	}
 
-	public function getCheckSum($packetPlaintext) {
+	protected function getCheckSum($packetPlaintext) {
 		$pkNumber = pack("P", $this->sendPacketCounter++);
 		return hex2bin(substr(hash("sha256", $pkNumber . $packetPlaintext . $this->finalSecretKey), 0, 16));
 	}

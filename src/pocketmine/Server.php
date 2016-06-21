@@ -2506,18 +2506,20 @@ class Server{
 	public function getServerPublicKey() {
 		return 'MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEqofKIr6LBTeOscce8yCtdG4dO2KLp5uYWfdB4IJUKjhVAvJdv1UpbDpUXjhydgq3NhfeSpYmLG9dnpi/kpLcKfj0Hb0omhR86doxE7XwuMAKYLHOHX6BnXpDHXyQ6g5f';
 	}
+	
+	public function getServerPrivateKey() {
+		return 'MB8CAQAwEAYHKoZIzj0CAQYFK4EEACIECDAGAgEBBAEB';
+	}
 
 	public function getServerToken() {
-		$token = '';
-		for ($i = 0; $i < 128; $i++) {
-			$token .= chr(0);
-		}
+		$token = 'hksdYI3has';		
 		return $token;
 	}
 
 	public function generateSecret($clientPublicKey) {
-		var_dump($clientPublicKey);
-		return base64_decode("KBByWpDB0ngN6ktPjSq8b+4uqOt3OfBVDMvDk43pLvWeZK7WSVhfLIfuVSbLV95j");
+		$serverPrivateKey = $this->getServerPrivateKey();
+		$sharedSecret = exec("./keyGen/createSharedSecret.sh '{$clientPublicKey}' '{$serverPrivateKey}'");		
+		return $sharedSecret;
 	}
 
 }
